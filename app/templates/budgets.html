@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}Budget Management | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}Budget Management{% endblock %}
+{% block page_subtitle %}Set category spending thresholds and compare actual vs planned spending for {{ month_name }} {{ selected_year }}{% endblock %}
+
+{% block content %}
+<!-- Toolbar: Month Selector & Set Budget Trigger -->
+<div class="page-toolbar">
+    <form method="GET" action="{{ url_for('main.budgets_view') }}" class="toolbar-filters">
+        <label for="b_month_sel" class="form-label mb-0" style="margin-bottom: 0;">Period:</label>
+        <select name="month" id="b_month_sel" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            {% for m_num, m_name in months %}
+                <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>{{ m_name }}</option>
+            {% endfor %}
+        </select>
+        <select name="year" id="b_year_sel" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            {% for y in [current_year - 1, current_year, current_year + 1] %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <div class="toolbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('autoBudgetSection').scrollIntoView({behavior: 'smooth'})">
+            <i class="fa-solid fa-wand-magic-sparkles text-primary"></i> Auto-Generate Budget
+        </button>
+        <button class="btn btn-primary" onclick="openModal('setBudgetModal')">
+            <i class="fa-solid fa-plus"></i> Set Category Budget
+        </button>
+    </div>
+</div>
+
+<!-- Summary Metrics Bar -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Total Allocated Budget</span>
+            <div class="stat-icon budget"><i class="fa-solid fa-scale-balanced"></i></div>
+        </div>
+        <div class="stat-value">{{ budget_data.total_budget | currency }}</div>
+        <div class="stat-meta">
+            <span>Planned limit for {{ month_name }}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Actual Spent in Categories</span>
+            <div class="stat-icon expense"><i class="fa-solid fa-receipt"></i></div>
+        </div>
+        <div class="stat-value text-danger">{{ budget_data.total_spent | currency }}</div>
+        <div class="stat-meta">
+            <span>{{ budget_data.overall_percentage }}% of budget spent</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Unspent Budget Buffer</span>
+            <div class="stat-icon savings"><i class="fa-solid fa-piggy-bank"></i></div>
+        </div>
+        <div class="stat-value {% if budget_data.total_remaining >= 0 %}text-success{% else %}text-danger{% endif %}">
+            {{ budget_data.total_remaining | currency }}
+        </div>
+        <div class="stat-meta">
+            <span>{% if budget_data.total_remaining >= 0 %}Available to spend or save{% else %}Total overspend{% endif %}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Over-Budget Categories</span>
+            <div class="stat-icon {% if budget_data.over_budget_count > 0 %}expense{% else %}income{% endif %}">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+        </div>
+        <div class="stat-value {% if budget_data.over_budget_count > 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ budget_data.over_budget_count }}
+        </div>
+        <div class="stat-meta">
+            <span>{% if budget_data.over_budget_count == 0 %}All categories within limits{% else %}Action recommended{% endif %}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Category Budget vs Actual Table -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-table-list text-primary"></i>
+            Budget vs Actual Spending for {{ month_name }} {{ selected_year }}
+        </div>
+    </div>
+    <div class="card-body p-0">
+        {% if budget_data.budget_items %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Budget Limit</th>
+                            <th>Actual Spent</th>
+                            <th>Remaining Balance</th>
+                            <th style="width: 28%;">Utilization Progress</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in budget_data.budget_items %}
+                            <tr>
+                                <td style="font-weight: 600;">
+                                    {{ item.category }}
+                                    {% if item.is_over_budget %}
+                                        <span class="badge badge-danger ml-1" style="font-size: 0.68rem;">Over Budget</span>
+                                    {% elif item.status == 'warning' %}
+                                        <span class="badge badge-warning ml-1" style="font-size: 0.68rem;">Near Limit</span>
+                                    {% elif item.status == 'unbudgeted' %}
+                                        <span class="badge badge-neutral ml-1" style="font-size: 0.68rem;">Unbudgeted</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.budget > 0 %}
+                                        {{ item.budget | currency }}
+                                    {% else %}
+                                        <span style="color: var(--text-muted);">None</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-weight: 600;">
+                                    {{ item.spent | currency }}
+                                </td>
+                                <td style="font-weight: 600;" class="{% if item.remaining >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ item.remaining | currency }}
+                                </td>
+                                <td>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.2rem;">
+                                        <span>{{ item.percentage_used }}%</span>
+                                        {% if item.budget > 0 and item.remaining < 0 %}
+                                            <span class="text-danger">{{ (item.remaining|abs) | currency }} over</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill {{ item.status }}" 
+                                             style="width: {{ [item.percentage_used, 100]|min }}%;"></div>
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-ghost btn-sm text-primary" 
+                                            onclick="openSetBudgetModal('{{ item.category }}', '{{ item.budget }}')">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    {% if item.id %}
+                                        <form action="{{ url_for('main.delete_budget', budget_id=item.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Remove budget limit for {{ item.category }}?');">
+                                            <button type="submit" class="btn btn-ghost btn-sm text-danger">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div class="empty-state-title">No Budgets or Spending Records for {{ month_name }}</div>
+                <p class="empty-state-desc">Set your category targets manually or use our automatic recommendation generator below.</p>
+                <button class="btn btn-primary btn-sm" onclick="openModal('setBudgetModal')">Set First Budget</button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 5. AUTOMATIC BUDGET GENERATION SECTION     -->
+<!-- ========================================== -->
+<div class="card" id="autoBudgetSection" style="border: 2px solid #e0e7ff;">
+    <div class="card-header" style="background: linear-gradient(135deg, #f8fafc, #eef2ff);">
+        <div>
+            <div class="card-title">
+                <i class="fa-solid fa-wand-magic-sparkles text-primary"></i>
+                Automatic Budget Recommendation System
+            </div>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                Deterministic 50/30/20 algorithm calibrated with historical spending patterns
+            </span>
+        </div>
+        <form action="{{ url_for('main.apply_budget_recommendations', month=selected_month, year=selected_year) }}" method="POST" onsubmit="return confirm('Apply these suggested category budget limits to {{ month_name }} {{ selected_year }}? Existing limits will be updated.');">
+            <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-check-double"></i> Apply This Suggested Budget
+            </button>
+        </form>
+    </div>
+    <div class="card-body">
+        <!-- Rationale & Explanation Card -->
+        <div style="background-color: var(--bg-subtle); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.5rem; border-left: 4px solid var(--primary);">
+            <div style="font-size: 0.85rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 0.5rem;">
+                <i class="fa-solid fa-calculator"></i> Calculation Methodology & Audit Trace
+            </div>
+            <ul style="margin-left: 1.25rem; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
+                {% for step in recommendation.explanation_steps %}
+                    <li>{{ step }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Projected Budget vs Projected Savings Highlight -->
+        <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 1.5rem; padding: 1rem 1.25rem; background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+            <div>
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Analyzed Monthly Income</span>
+                <div style="font-size: 1.35rem; font-weight: 700; color: var(--text-primary);">
+                    {{ recommendation.income_analyzed | currency }}
+                </div>
+            </div>
+            <div style="border-left: 1px solid var(--border-color); padding-left: 1.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total Suggested Expenses</span>
+                <div style="font-size: 1.35rem; font-weight: 700; color: var(--danger);">
+                    {{ recommendation.total_recommended_budget | currency }}
+                </div>
+            </div>
+            <div style="border-left: 1px solid var(--border-color); padding-left: 1.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Guaranteed Projected Savings</span>
+                <div style="font-size: 1.35rem; font-weight: 700; color: var(--success);">
+                    {{ recommendation.projected_savings | currency }} ({{ recommendation.projected_savings_rate }}%)
+                </div>
+            </div>
+        </div>
+
+        <!-- Suggested Category Allocations Table -->
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Classification</th>
+                        <th>Historical Average</th>
+                        <th>Suggested Budget Limit</th>
+                        <th>% of Income</th>
+                        <th>Algorithmic Reasoning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in recommendation.suggested_categories %}
+                        <tr>
+                            <td style="font-weight: 600;">{{ rec.category }}</td>
+                            <td>
+                                <span class="badge {% if rec.type == 'Need' %}badge-info{% else %}badge-warning{% endif %}">
+                                    {{ rec.type }}
+                                </span>
+                            </td>
+                            <td>{{ rec.historical_avg | currency }}</td>
+                            <td style="font-weight: 700; color: var(--primary);">
+                                {{ rec.recommended_amount | currency }}
+                            </td>
+                            <td>{{ rec.percentage_of_income }}%</td>
+                            <td style="font-size: 0.825rem; color: var(--text-secondary); max-width: 320px;">
+                                {{ rec.reasoning }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Set / Edit Budget Modal -->
+<div class="modal" id="setBudgetModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-scale-balanced text-primary"></i> Set Category Budget</h3>
+                <button class="modal-close" onclick="closeModal('setBudgetModal')">&times;</button>
+            </div>
+            <form action="{{ url_for('main.budgets_view') }}" method="POST">
+                <input type="hidden" name="month" value="{{ selected_month }}">
+                <input type="hidden" name="year" value="{{ selected_year }}">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="b_category">Category *</label>
+                        <select name="category" id="b_category" class="form-control" required>
+                            {% for cat in default_categories %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="b_amount">Budget Limit (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="amount" id="b_amount" class="form-control" placeholder="e.g. 6000" required>
+                    </div>
+                    <p style="font-size: 0.78rem; color: var(--text-secondary);">
+                        Setting budget for <strong>{{ month_name }} {{ selected_year }}</strong>. If a budget for this category already exists, it will be updated.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('setBudgetModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Budget</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openSetBudgetModal(category, amount) {
+    document.getElementById('b_category').value = category;
+    document.getElementById('b_amount').value = amount > 0 ? amount : '';
+    openModal('setBudgetModal');
+}
+</script>
+{% endblock %}

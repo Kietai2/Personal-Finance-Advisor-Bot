@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Gemini AI Financial Advisor | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}AI Financial Advisor{% endblock %}
+{% block page_subtitle %}Intelligent analysis, spending diagnostics, and personalized wealth coaching{% endblock %}
+
+{% block content %}
+<!-- AI Advisor Hero Section -->
+<div class="ai-advisor-hero">
+    <div class="ai-hero-content">
+        <div class="ai-hero-badge">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            {% if has_gemini %}Powered by Google Gemini AI{% else %}Built-in Financial Intelligence Engine{% endif %}
+        </div>
+        <h2 class="ai-hero-title">Your Personal AI Wealth & Budget Strategist</h2>
+        <p class="ai-hero-desc">
+            Get an in-depth audit of your cash flow for <strong>{{ summary.month_name }} {{ summary.year }}</strong>. Our AI analyzes your income, category expenses, budget limits, and savings goals to uncover actionable optimization opportunities.
+        </p>
+
+        <!-- Interactive Question Form -->
+        <form action="{{ url_for('main.advisor_view', month=selected_month, year=selected_year) }}" method="POST" id="aiAuditForm">
+            <div class="ai-query-box">
+                <input type="text" name="custom_query" id="custom_query" class="ai-query-input" 
+                       placeholder="Ask a specific question (e.g., 'How can I save ₹5,000 more this month?')..." 
+                       value="{{ custom_query }}">
+                <button type="submit" class="btn btn-primary" id="analyzeBtn" style="border-radius: var(--radius-md);">
+                    <i class="fa-solid fa-bolt"></i> Run AI Analysis
+                </button>
+            </div>
+
+            <!-- Quick Suggestion Prompt Chips -->
+            <div class="ai-chips-container">
+                <span class="ai-chip" onclick="setQuery('Provide a full comprehensive financial audit of this month.')">
+                    <i class="fa-solid fa-file-invoice"></i> Comprehensive Audit
+                </span>
+                <span class="ai-chip" onclick="setQuery('How can I reduce my highest spending categories by 15%?')">
+                    <i class="fa-solid fa-scissors"></i> Cut Top Expenses
+                </span>
+                <span class="ai-chip" onclick="setQuery('How can I boost my monthly savings rate to at least 25%?')">
+                    <i class="fa-solid fa-arrow-trend-up"></i> Boost Savings Rate
+                </span>
+                <span class="ai-chip" onclick="setQuery('Evaluate my active savings goals and calculate required monthly deposits.')">
+                    <i class="fa-solid fa-bullseye"></i> Goal Feasibility Review
+                </span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Month Selection Toolbar -->
+<div class="page-toolbar">
+    <form method="GET" action="{{ url_for('main.advisor_view') }}" class="toolbar-filters">
+        <label for="adv_month_sel" class="form-label mb-0" style="margin-bottom: 0;">Audit Period:</label>
+        <select name="month" id="adv_month_sel" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            {% for m_num, m_name in months %}
+                <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>{{ m_name }}</option>
+            {% endfor %}
+        </select>
+        <select name="year" id="adv_year_sel" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            {% for y in [current_year - 1, current_year, current_year + 1] %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <div class="toolbar-actions">
+        <span class="badge {% if has_gemini %}badge-success{% else %}badge-warning{% endif %}">
+            <i class="fa-solid fa-circle-dot"></i>
+            {% if has_gemini %}Live Gemini API Active{% else %}Local Heuristics Engine Active{% endif %}
+        </span>
+    </div>
+</div>
+
+<!-- Loading State Spinner Container -->
+<div id="aiLoading" style="display: none; padding: 3rem 1rem; text-align: center;">
+    <div style="font-size: 2.5rem; color: var(--primary); animation: spin 1s linear infinite; display: inline-block;">
+        <i class="fa-solid fa-circle-notch"></i>
+    </div>
+    <div style="font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; margin-top: 1rem; color: var(--text-primary);">
+        Analyzing Financial Data with AI...
+    </div>
+    <p style="font-size: 0.875rem; color: var(--text-secondary); max-width: 450px; margin: 0.5rem auto 0;">
+        Synthesizing income flows, categorizing expenses, inspecting budget deviations, and formulating structured recommendations.
+    </p>
+</div>
+
+<style>
+@keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
+
+<!-- AI Analysis Output Card -->
+{% if ai_result %}
+<div class="ai-result-card" id="aiResultContainer">
+    <div class="ai-result-header">
+        <div>
+            <span class="ai-source-badge">
+                <i class="fa-solid fa-microchip"></i> {{ ai_result.source }} ({{ ai_result.model }})
+            </span>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">
+                Target Profile: {{ summary.month_name }} {{ summary.year }} &bull; Inflow: {{ summary.total_income | currency }} &bull; Outflow: {{ summary.total_expenses | currency }}
+            </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="window.print()">
+            <i class="fa-solid fa-print"></i> Print Insights
+        </button>
+    </div>
+
+    {% if ai_result.notice %}
+        <div class="alert alert-info" style="font-size: 0.85rem; margin-bottom: 1.5rem;">
+            <div class="alert-content">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>{{ ai_result.notice }}</span>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Markdown Render Container -->
+    <div class="markdown-body" id="renderedMarkdown">
+        {{ ai_result.analysis | safe }}
+    </div>
+
+    <!-- Mandatory Educational Compliance Disclaimer -->
+    <div class="ai-disclaimer-box">
+        <i class="fa-solid fa-scale-balanced" style="font-size: 1.2rem; flex-shrink: 0; margin-top: 0.1rem;"></i>
+        <div>
+            <strong>Educational & Informational Disclaimer:</strong>
+            {{ ai_result.disclaimer }}
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Initial Prompt / Call-to-Action State -->
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <div class="empty-state-icon" style="background-color: #eef2ff; color: var(--primary);">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div class="empty-state-title">Ready for Your Personalized Financial Analysis</div>
+            <p class="empty-state-desc">
+                Click the button below or choose a prompt above to request a full AI financial audit for {{ summary.month_name }} {{ summary.year }}.
+            </p>
+            <form action="{{ url_for('main.advisor_view', month=selected_month, year=selected_year) }}" method="POST">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fa-solid fa-bolt"></i> Generate Comprehensive Analysis
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Lightweight Markdown Parser for rendered output if raw markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if renderedMarkdown element contains raw markdown
+    const mdEl = document.getElementById('renderedMarkdown');
+    if (mdEl) {
+        const rawText = mdEl.textContent || mdEl.innerText;
+        if (rawText && (rawText.includes('###') || rawText.includes('**') || rawText.includes('- '))) {
+            try {
+                mdEl.innerHTML = marked.parse(rawText);
+            } catch (err) {
+                console.error("Markdown parse error:", err);
+            }
+        }
+    }
+
+    // Attach loading spinner to form submission
+    const form = document.getElementById('aiAuditForm');
+    if (form) {
+        form.addEventListener('submit', () => {
+            const resultBox = document.getElementById('aiResultContainer');
+            if (resultBox) resultBox.style.display = 'none';
+            document.getElementById('aiLoading').style.display = 'block';
+        });
+    }
+});
+
+function setQuery(text) {
+    document.getElementById('custom_query').value = text;
+    document.getElementById('aiAuditForm').submit();
+}
+</script>
+{% endblock %}

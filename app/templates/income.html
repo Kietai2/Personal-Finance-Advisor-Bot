@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Income Management | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}Income Management{% endblock %}
+{% block page_subtitle %}Track, categorize, and log all salary, freelance, and secondary inflows{% endblock %}
+
+{% block content %}
+<!-- Toolbar: Filters & Add Income Button -->
+<div class="page-toolbar">
+    <form method="GET" action="{{ url_for('main.income_view') }}" class="toolbar-filters">
+        <input type="text" name="search" value="{{ search }}" class="form-control" placeholder="Search source or notes..." style="width: 220px;">
+        
+        <select name="source" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Sources</option>
+            {% for src in default_income_sources %}
+                <option value="{{ src }}" {% if src == selected_source %}selected{% endif %}>{{ src }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="month" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Months</option>
+            {% for m_num, m_name in months %}
+                <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>{{ m_name }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="year" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Years</option>
+            {% for y in [current_year - 1, current_year, current_year + 1] %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+
+        {% if search or selected_source or selected_month or selected_year %}
+            <a href="{{ url_for('main.income_view') }}" class="btn btn-ghost btn-sm">Clear</a>
+        {% endif %}
+    </form>
+
+    <div class="toolbar-actions">
+        <button class="btn btn-success" onclick="openModal('addIncomeModal')">
+            <i class="fa-solid fa-plus"></i> Record Income
+        </button>
+    </div>
+</div>
+
+<!-- Total Filtered Income Stat Banner -->
+<div style="background: linear-gradient(135deg, #059669, #047857); color: white; border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+    <div>
+        <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85;">Filtered Total Inflow</span>
+        <div style="font-family: var(--font-heading); font-size: 1.85rem; font-weight: 700;">
+            {{ total_filtered_income | currency }}
+        </div>
+    </div>
+    <div style="font-size: 2.25rem; opacity: 0.3;">
+        <i class="fa-solid fa-money-bill-trend-up"></i>
+    </div>
+</div>
+
+<!-- Incomes Ledger Table -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-list-ul text-success"></i>
+            Recorded Inflow Transactions ({{ incomes|length }})
+        </div>
+    </div>
+    <div class="card-body p-0">
+        {% if incomes %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Source</th>
+                            <th>Amount</th>
+                            <th>Notes</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inc in incomes %}
+                            <tr>
+                                <td style="font-weight: 500;">
+                                    {{ inc.date.strftime('%b %d, %Y') }}
+                                </td>
+                                <td>
+                                    <span class="badge badge-success">
+                                        <i class="fa-solid fa-plus"></i> {{ inc.source }}
+                                    </span>
+                                    {% if inc.is_demo %}
+                                        <span class="badge badge-demo">Sample</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-weight: 700;" class="text-success">
+                                    +{{ inc.amount | currency }}
+                                </td>
+                                <td style="color: var(--text-secondary); max-width: 250px;">
+                                    {{ inc.notes or '—' }}
+                                </td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-ghost btn-sm text-primary" 
+                                            onclick="openEditIncomeModal('{{ inc.id }}', '{{ inc.source }}', '{{ inc.amount }}', '{{ inc.date.strftime('%Y-%m-%d') }}', '{{ inc.notes or '' }}')">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <form action="{{ url_for('main.delete_income', income_id=inc.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Delete this income record?');">
+                                        <button type="submit" class="btn btn-ghost btn-sm text-danger">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+                <div class="empty-state-title">No Income Records Found</div>
+                <p class="empty-state-desc">No income entries match your selected criteria. Add your first salary or revenue stream.</p>
+                <button class="btn btn-success btn-sm" onclick="openModal('addIncomeModal')">Add Income Now</button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Income Modal -->
+<div class="modal" id="addIncomeModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-money-bill-wave text-success"></i> Record New Income</h3>
+                <button class="modal-close" onclick="closeModal('addIncomeModal')">&times;</button>
+            </div>
+            <form action="{{ url_for('main.income_view') }}" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="add_inc_source">Income Source *</label>
+                        <select name="source" id="add_inc_source" class="form-control" required>
+                            {% for src in default_income_sources %}
+                                <option value="{{ src }}">{{ src }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_inc_amount">Amount (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="amount" id="add_inc_amount" class="form-control" placeholder="e.g. 35000" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_inc_date">Date of Inflow *</label>
+                        <input type="date" name="date" id="add_inc_date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_inc_notes">Notes / Reference</label>
+                        <input type="text" name="notes" id="add_inc_notes" class="form-control" placeholder="e.g. Net monthly salary credited to bank">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addIncomeModal')">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="fa-solid fa-check"></i> Save Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Income Modal -->
+<div class="modal" id="editIncomeModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square text-primary"></i> Edit Income Record</h3>
+                <button class="modal-close" onclick="closeModal('editIncomeModal')">&times;</button>
+            </div>
+            <form id="editIncomeForm" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="edit_inc_source">Income Source *</label>
+                        <select name="source" id="edit_inc_source" class="form-control" required>
+                            {% for src in default_income_sources %}
+                                <option value="{{ src }}">{{ src }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit_inc_amount">Amount (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="amount" id="edit_inc_amount" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit_inc_date">Date *</label>
+                        <input type="date" name="date" id="edit_inc_date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit_inc_notes">Notes</label>
+                        <input type="text" name="notes" id="edit_inc_notes" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editIncomeModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Update Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditIncomeModal(id, source, amount, date, notes) {
+    const form = document.getElementById('editIncomeForm');
+    form.action = `/income/${id}/edit`;
+    document.getElementById('edit_inc_source').value = source;
+    document.getElementById('edit_inc_amount').value = amount;
+    document.getElementById('edit_inc_date').value = date;
+    document.getElementById('edit_inc_notes').value = notes;
+    openModal('editIncomeModal');
+}
+</script>
+{% endblock %}

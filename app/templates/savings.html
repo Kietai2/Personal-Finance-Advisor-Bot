@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Savings Goals & Wealth Tracking | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}Savings & Goals{% endblock %}
+{% block page_subtitle %}Track cumulative wealth generation, savings rates, and progress toward financial targets{% endblock %}
+
+{% block content %}
+<!-- Top Toolbar -->
+<div class="page-toolbar">
+    <div class="toolbar-filters">
+        <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-secondary);">
+            <i class="fa-solid fa-calendar-day text-primary"></i> Current Billing Month: {{ summary.month_name }} {{ summary.year }}
+        </span>
+    </div>
+    <div class="toolbar-actions">
+        <button class="btn btn-primary" onclick="openModal('addGoalModal')">
+            <i class="fa-solid fa-plus"></i> New Savings Goal
+        </button>
+    </div>
+</div>
+
+<!-- Savings KPI Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Cumulative All-Time Savings</span>
+            <div class="stat-icon savings"><i class="fa-solid fa-vault"></i></div>
+        </div>
+        <div class="stat-value text-primary">{{ all_time_savings | currency }}</div>
+        <div class="stat-meta">
+            <span>Total Income minus Total Expenses</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Monthly Savings ({{ summary.month_name }})</span>
+            <div class="stat-icon income"><i class="fa-solid fa-money-bill-transfer"></i></div>
+        </div>
+        <div class="stat-value {% if summary.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
+            {{ summary.savings | currency }}
+        </div>
+        <div class="stat-meta">
+            <span>{{ summary.total_income | currency }} - {{ summary.total_expenses | currency }}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Monthly Savings Rate</span>
+            <div class="stat-icon rate"><i class="fa-solid fa-percent"></i></div>
+        </div>
+        <div class="stat-value">{{ summary.savings_rate | percentage }}</div>
+        <div class="stat-meta">
+            <span>Formula: (Savings / Total Income) &times; 100</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Active Savings Goals</span>
+            <div class="stat-icon budget"><i class="fa-solid fa-bullseye"></i></div>
+        </div>
+        <div class="stat-value">{{ goals|length }}</div>
+        <div class="stat-meta">
+            <span>{{ goals|selectattr('is_achieved')|list|length }} targets fully achieved</span>
+        </div>
+    </div>
+</div>
+
+<!-- Historical Net Savings Trend Chart -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-chart-line text-primary"></i>
+            6-Month Historical Savings Momentum
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="chart-container">
+            <canvas id="savingsTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Financial Goals Section -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-bullseye text-primary"></i>
+            Target Milestones & Savings Goals ({{ goals|length }})
+        </div>
+        <button class="btn btn-outline-primary btn-sm" onclick="openModal('addGoalModal')">
+            <i class="fa-solid fa-plus"></i> Add Goal
+        </button>
+    </div>
+    <div class="card-body">
+        {% if goals %}
+            <div class="goals-grid">
+                {% for g in goals %}
+                    <div class="goal-card" style="border: 1px solid var(--border-color); background: #ffffff;">
+                        <div>
+                            <div class="goal-header">
+                                <div>
+                                    <div class="goal-title">{{ g.name }}</div>
+                                    <div class="goal-date">
+                                        <i class="fa-regular fa-calendar"></i> Target Date: {{ g.target_date.strftime('%b %d, %Y') }}
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    <button class="btn btn-ghost btn-sm text-primary" style="padding: 0.2rem 0.4rem;" 
+                                            onclick="openEditGoalModal('{{ g.id }}', '{{ g.name }}', '{{ g.target_amount }}', '{{ g.current_amount }}', '{{ g.target_date.strftime('%Y-%m-%d') }}')">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <form action="{{ url_for('main.delete_savings_goal', goal_id=g.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Delete this savings goal?');">
+                                        <button type="submit" class="btn btn-ghost btn-sm text-danger" style="padding: 0.2rem 0.4rem;">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="goal-numbers">
+                                <span class="goal-current">{{ g.current_amount | currency }}</span>
+                                <span class="goal-target">of {{ g.target_amount | currency }}</span>
+                            </div>
+
+                            <div class="progress-bar-container" style="height: 10px;">
+                                <div class="progress-bar-fill {% if g.is_achieved %}normal{% else %}primary{% endif %}" 
+                                     style="width: {{ g.progress_percentage }}%;"></div>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                <span>{{ g.progress_percentage }}% saved</span>
+                                <span>
+                                    {% if g.is_achieved %}
+                                        <strong class="text-success"><i class="fa-solid fa-circle-check"></i> Achieved!</strong>
+                                    {% else %}
+                                        {{ g.remaining_amount | currency }} remaining
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Contribute Quick Action -->
+                        <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+                            <form action="{{ url_for('main.contribute_to_goal', goal_id=g.id) }}" method="POST" style="display: flex; gap: 0.5rem;">
+                                <input type="number" step="0.01" min="1" name="amount" class="form-control form-control-sm" placeholder="Add ₹ amount" required style="padding: 0.35rem 0.6rem; font-size: 0.8rem;">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="fa-solid fa-plus"></i> Add
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fa-solid fa-piggy-bank"></i></div>
+                <div class="empty-state-title">No Savings Goals Set</div>
+                <p class="empty-state-desc">Define targets like an Emergency Fund, High-End Laptop, Tech Trip, or Higher Education.</p>
+                <button class="btn btn-primary btn-sm" onclick="openModal('addGoalModal')">Create Your First Goal</button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Goal Modal -->
+<div class="modal" id="addGoalModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-bullseye text-primary"></i> Create Financial Goal</h3>
+                <button class="modal-close" onclick="closeModal('addGoalModal')">&times;</button>
+            </div>
+            <form action="{{ url_for('main.add_savings_goal') }}" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="goal_name">Goal Name *</label>
+                        <input type="text" name="name" id="goal_name" class="form-control" placeholder="e.g. Emergency Fund (6 Months)" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="goal_target">Target Amount (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="target_amount" id="goal_target" class="form-control" placeholder="e.g. 100000" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="goal_current">Current Initial Amount (₹)</label>
+                        <input type="number" step="0.01" min="0" name="current_amount" id="goal_current" class="form-control" value="0.0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="goal_date">Target Completion Date *</label>
+                        <input type="date" name="target_date" id="goal_date" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addGoalModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Goal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Goal Modal -->
+<div class="modal" id="editGoalModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square text-primary"></i> Edit Savings Goal</h3>
+                <button class="modal-close" onclick="closeModal('editGoalModal')">&times;</button>
+            </div>
+            <form id="editGoalForm" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="e_goal_name">Goal Name *</label>
+                        <input type="text" name="name" id="e_goal_name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="e_goal_target">Target Amount (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="target_amount" id="e_goal_target" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="e_goal_current">Current Amount (₹) *</label>
+                        <input type="number" step="0.01" min="0" name="current_amount" id="e_goal_current" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="e_goal_date">Target Date *</label>
+                        <input type="date" name="target_date" id="e_goal_date" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editGoalModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Update Goal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const historyData = {{ history | tojson }};
+    const historyLabels = historyData.map(h => h.label);
+    const historySavings = historyData.map(h => h.savings);
+
+    FinanceCharts.renderSavingsTrendLine('savingsTrendChart', historyLabels, historySavings);
+});
+
+function openEditGoalModal(id, name, target, current, date) {
+    const form = document.getElementById('editGoalForm');
+    form.action = `/savings/goals/${id}/edit`;
+    document.getElementById('e_goal_name').value = name;
+    document.getElementById('e_goal_target').value = target;
+    document.getElementById('e_goal_current').value = current;
+    document.getElementById('e_goal_date').value = date;
+    openModal('editGoalModal');
+}
+</script>
+{% endblock %}

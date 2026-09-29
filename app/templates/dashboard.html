@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}Financial Dashboard{% endblock %}
+{% block page_subtitle %}Comprehensive overview for {{ summary.month_name }} {{ summary.year }}{% endblock %}
+
+{% block content %}
+<!-- Top Month Filter & Demo Notice Bar -->
+<div class="page-toolbar">
+    <form method="GET" action="{{ url_for('main.dashboard') }}" class="toolbar-filters">
+        <label for="month_sel" class="form-label mb-0" style="margin-bottom: 0;">Period:</label>
+        <select name="month" id="month_sel" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            {% for m_num, m_name in months %}
+                <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>{{ m_name }}</option>
+            {% endfor %}
+        </select>
+        <select name="year" id="year_sel" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            {% for y in [current_year - 1, current_year, current_year + 1] %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <div class="toolbar-actions">
+        <a href="{{ url_for('main.advisor_view', month=selected_month, year=selected_year, auto_analyze=1) }}" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Financial Audit
+        </a>
+        <a href="{{ url_for('main.reports_view', month=selected_month, year=selected_year) }}" class="btn btn-secondary btn-sm">
+            <i class="fa-solid fa-file-lines"></i> View Full Report
+        </a>
+    </div>
+</div>
+
+<!-- Key Financial KPI Cards -->
+<div class="stats-grid">
+    <!-- Total Income -->
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Total Income</span>
+            <div class="stat-icon income"><i class="fa-solid fa-arrow-down-left"></i></div>
+        </div>
+        <div class="stat-value text-success">{{ summary.total_income | currency }}</div>
+        <div class="stat-meta {% if summary.comparison.income_change_pct >= 0 %}positive{% else %}negative{% endif %}">
+            <i class="fa-solid fa-arrow-{% if summary.comparison.income_change_pct >= 0 %}up{% else %}down{% endif %}"></i>
+            <span>{{ summary.comparison.income_change_pct }}% vs last month</span>
+        </div>
+    </div>
+
+    <!-- Total Expenses -->
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Total Expenses</span>
+            <div class="stat-icon expense"><i class="fa-solid fa-arrow-up-right"></i></div>
+        </div>
+        <div class="stat-value text-danger">{{ summary.total_expenses | currency }}</div>
+        <div class="stat-meta {% if summary.comparison.expense_change_pct <= 0 %}positive{% else %}negative{% endif %}">
+            <i class="fa-solid fa-arrow-{% if summary.comparison.expense_change_pct <= 0 %}down{% else %}up{% endif %}"></i>
+            <span>{{ summary.comparison.expense_change_pct }}% vs last month</span>
+        </div>
+    </div>
+
+    <!-- Monthly Savings -->
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Net Savings</span>
+            <div class="stat-icon savings"><i class="fa-solid fa-vault"></i></div>
+        </div>
+        <div class="stat-value {% if summary.savings >= 0 %}text-primary{% else %}text-danger{% endif %}">
+            {{ summary.savings | currency }}
+        </div>
+        <div class="stat-meta">
+            <span>Cumulative: {{ all_time_savings | currency }}</span>
+        </div>
+    </div>
+
+    <!-- Savings Rate -->
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Savings Rate</span>
+            <div class="stat-icon rate"><i class="fa-solid fa-chart-line"></i></div>
+        </div>
+        <div class="stat-value">{{ summary.savings_rate | percentage }}</div>
+        <div class="stat-meta">
+            <span>Target Benchmark: 20.0%</span>
+        </div>
+    </div>
+
+    <!-- Remaining Budget -->
+    <div class="stat-card">
+        <div class="stat-card-header">
+            <span class="stat-label">Remaining Budget</span>
+            <div class="stat-icon budget"><i class="fa-solid fa-scale-balanced"></i></div>
+        </div>
+        <div class="stat-value">{{ summary.remaining_budget | currency }}</div>
+        <div class="stat-meta">
+            <span>Allocated: {{ summary.total_budget | currency }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row: Income vs Expenses & Category Breakdown -->
+<div class="charts-grid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <i class="fa-solid fa-chart-column text-primary"></i>
+                6-Month Income vs Expense Trend
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="incomeExpenseChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <i class="fa-solid fa-chart-pie text-success"></i>
+                Category Spending Breakdown
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Two-Column Section: Budget Utilization & Recent Transactions -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+    <!-- Budget Utilization Card -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <i class="fa-solid fa-list-check text-warning"></i>
+                Budget Utilization ({{ summary.month_name }})
+            </div>
+            <a href="{{ url_for('main.budgets_view', month=selected_month, year=selected_year) }}" class="btn btn-ghost btn-sm">
+                Manage <i class="fa-solid fa-arrow-right fa-xs"></i>
+            </a>
+        </div>
+        <div class="card-body">
+            {% if summary.budget_comparison.budget_items %}
+                {% for item in summary.budget_comparison.budget_items[:5] %}
+                    <div style="margin-bottom: 1.1rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem;">
+                            <span>{{ item.category }}</span>
+                            <span>
+                                {{ item.spent | currency }}
+                                {% if item.budget > 0 %}
+                                    <span style="font-weight: 400; color: var(--text-secondary);">/ {{ item.budget | currency }} ({{ item.percentage_used }}%)</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">Unbudgeted</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill {{ item.status }}" 
+                                 style="width: {{ [item.percentage_used, 100]|min }}%;"></div>
+                        </div>
+                        {% if item.is_over_budget %}
+                            <div style="font-size: 0.72rem; color: var(--danger); font-weight: 600;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Over budget by {{ (item.spent - item.budget) | currency }}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                    <div class="empty-state-title">No Budgets Set</div>
+                    <p class="empty-state-desc">Set limits for food, rent, and entertainment to avoid overspending.</p>
+                    <a href="{{ url_for('main.budgets_view', month=selected_month, year=selected_year) }}" class="btn btn-primary btn-sm">Create Monthly Budget</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Transactions Card -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <i class="fa-solid fa-clock-rotate-left text-info"></i>
+                Recent Transactions
+            </div>
+            <a href="{{ url_for('main.transactions_view') }}" class="btn btn-ghost btn-sm">
+                View Ledger <i class="fa-solid fa-arrow-right fa-xs"></i>
+            </a>
+        </div>
+        <div class="card-body p-0">
+            {% if recent_transactions %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Category / Source</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in recent_transactions %}
+                                <tr>
+                                    <td>
+                                        <div style="font-weight: 500;">{{ tx.date.strftime('%b %d, %Y') }}</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ tx.description or 'No notes' }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if tx.type == 'income' %}badge-success{% else %}badge-neutral{% endif %}">
+                                            <i class="fa-solid fa-{% if tx.type == 'income' %}plus{% else %}tag{% endif %}"></i>
+                                            {{ tx.category_or_source }}
+                                        </span>
+                                    </td>
+                                    <td style="font-weight: 600;" class="{% if tx.type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                                        {% if tx.type == 'income' %}+{% else %}-{% endif %}{{ tx.amount | currency }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fa-solid fa-receipt"></i></div>
+                    <div class="empty-state-title">No Recent Transactions</div>
+                    <p class="empty-state-desc">Start tracking your income and expenses today.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Active Savings Goals Snapshot -->
+{% if goals %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-bullseye text-primary"></i>
+            Active Savings Goals
+        </div>
+        <a href="{{ url_for('main.savings_view') }}" class="btn btn-ghost btn-sm">All Goals &rarr;</a>
+    </div>
+    <div class="card-body">
+        <div class="goals-grid">
+            {% for g in goals[:3] %}
+                <div class="goal-card" style="border: 1px solid var(--border-color); background: var(--bg-base);">
+                    <div class="goal-header">
+                        <div>
+                            <div class="goal-title">{{ g.name }}</div>
+                            <div class="goal-date"><i class="fa-regular fa-calendar"></i> Target: {{ g.target_date.strftime('%b %d, %Y') }}</div>
+                        </div>
+                        <span class="badge {% if g.is_achieved %}badge-success{% else %}badge-info{% endif %}">
+                            {{ g.progress_percentage }}%
+                        </span>
+                    </div>
+                    <div class="goal-numbers">
+                        <span class="goal-current">{{ g.current_amount | currency }}</span>
+                        <span class="goal-target">of {{ g.target_amount | currency }}</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill primary" style="width: {{ g.progress_percentage }}%;"></div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. History Bar Chart
+    const historyData = {{ history | tojson }};
+    const historyLabels = historyData.map(h => h.label);
+    const historyIncome = historyData.map(h => h.income);
+    const historyExpenses = historyData.map(h => h.expenses);
+
+    FinanceCharts.renderIncomeExpenseBar('incomeExpenseChart', historyLabels, historyIncome, historyExpenses);
+
+    // 2. Category Doughnut Chart
+    const breakdown = {{ summary.category_breakdown | tojson }};
+    const catLabels = breakdown.map(c => c.category);
+    const catAmounts = breakdown.map(c => c.amount);
+
+    FinanceCharts.renderCategoryDoughnut('categoryChart', catLabels, catAmounts);
+});
+</script>
+{% endblock %}

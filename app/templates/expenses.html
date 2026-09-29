@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Expense Management | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}Expense Management{% endblock %}
+{% block page_subtitle %}Log, categorize, and monitor daily and recurring expenditures{% endblock %}
+
+{% block content %}
+<!-- Toolbar: Filters & Add Expense Button -->
+<div class="page-toolbar">
+    <form method="GET" action="{{ url_for('main.expenses_view') }}" class="toolbar-filters">
+        <input type="text" name="search" value="{{ search }}" class="form-control" placeholder="Search description..." style="width: 180px;">
+        
+        <select name="category" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Categories</option>
+            {% for cat in default_categories %}
+                <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="month" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Months</option>
+            {% for m_num, m_name in months %}
+                <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>{{ m_name }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="year" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Years</option>
+            {% for y in [current_year - 1, current_year, current_year + 1] %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="date" name="start_date" value="{{ start_date }}" class="form-control" title="Start Date" style="width: auto;">
+        <input type="date" name="end_date" value="{{ end_date }}" class="form-control" title="End Date" style="width: auto;">
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="fa-solid fa-filter"></i> Apply</button>
+
+        {% if search or selected_category or selected_month or selected_year or start_date or end_date %}
+            <a href="{{ url_for('main.expenses_view') }}" class="btn btn-ghost btn-sm">Clear</a>
+        {% endif %}
+    </form>
+
+    <div class="toolbar-actions">
+        <button class="btn btn-danger" onclick="openModal('addExpenseModal')">
+            <i class="fa-solid fa-plus"></i> Record Expense
+        </button>
+    </div>
+</div>
+
+<!-- Total Filtered Expense Stat Banner -->
+<div style="background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+    <div>
+        <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85;">Filtered Total Spending</span>
+        <div style="font-family: var(--font-heading); font-size: 1.85rem; font-weight: 700;">
+            {{ total_filtered_expenses | currency }}
+        </div>
+    </div>
+    <div style="font-size: 2.25rem; opacity: 0.3;">
+        <i class="fa-solid fa-receipt"></i>
+    </div>
+</div>
+
+<!-- Expenses Ledger Table -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-receipt text-danger"></i>
+            Recorded Outflow Transactions ({{ expenses|length }})
+        </div>
+    </div>
+    <div class="card-body p-0">
+        {% if expenses %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Description</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exp in expenses %}
+                            <tr>
+                                <td style="font-weight: 500;">
+                                    {{ exp.date.strftime('%b %d, %Y') }}
+                                </td>
+                                <td>
+                                    <span class="badge badge-neutral">
+                                        <i class="fa-solid fa-tag"></i> {{ exp.category }}
+                                    </span>
+                                    {% if exp.is_demo %}
+                                        <span class="badge badge-demo">Sample</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-weight: 700;" class="text-danger">
+                                    -{{ exp.amount | currency }}
+                                </td>
+                                <td style="color: var(--text-secondary); max-width: 280px;">
+                                    {{ exp.description or '—' }}
+                                </td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-ghost btn-sm text-primary" 
+                                            onclick="openEditExpenseModal('{{ exp.id }}', '{{ exp.category }}', '{{ exp.amount }}', '{{ exp.date.strftime('%Y-%m-%d') }}', '{{ exp.description or '' }}')">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <form action="{{ url_for('main.delete_expense', expense_id=exp.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Delete this expense?');">
+                                        <button type="submit" class="btn btn-ghost btn-sm text-danger">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fa-solid fa-receipt"></i></div>
+                <div class="empty-state-title">No Expenses Found</div>
+                <p class="empty-state-desc">No expense records match your active filters. Log your recent bills or purchases.</p>
+                <button class="btn btn-danger btn-sm" onclick="openModal('addExpenseModal')">Add Expense</button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Expense Modal -->
+<div class="modal" id="addExpenseModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-receipt text-danger"></i> Log New Expense</h3>
+                <button class="modal-close" onclick="closeModal('addExpenseModal')">&times;</button>
+            </div>
+            <form action="{{ url_for('main.expenses_view') }}" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="add_exp_category">Category *</label>
+                        <select name="category" id="add_exp_category" class="form-control" required>
+                            {% for cat in default_categories %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_exp_amount">Amount (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="amount" id="add_exp_amount" class="form-control" placeholder="e.g. 1200" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_exp_date">Date of Purchase *</label>
+                        <input type="date" name="date" id="add_exp_date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_exp_desc">Description / Notes</label>
+                        <input type="text" name="description" id="add_exp_desc" class="form-control" placeholder="e.g. Weekly grocery provisions from DMart">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addExpenseModal')">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="fa-solid fa-check"></i> Log Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Expense Modal -->
+<div class="modal" id="editExpenseModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square text-primary"></i> Edit Expense</h3>
+                <button class="modal-close" onclick="closeModal('editExpenseModal')">&times;</button>
+            </div>
+            <form id="editExpenseForm" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" for="edit_exp_category">Category *</label>
+                        <select name="category" id="edit_exp_category" class="form-control" required>
+                            {% for cat in default_categories %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit_exp_amount">Amount (₹) *</label>
+                        <input type="number" step="0.01" min="1" name="amount" id="edit_exp_amount" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit_exp_date">Date *</label>
+                        <input type="date" name="date" id="edit_exp_date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit_exp_desc">Description</label>
+                        <input type="text" name="description" id="edit_exp_desc" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editExpenseModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Update Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditExpenseModal(id, category, amount, date, description) {
+    const form = document.getElementById('editExpenseForm');
+    form.action = `/expenses/${id}/edit`;
+    document.getElementById('edit_exp_category').value = category;
+    document.getElementById('edit_exp_amount').value = amount;
+    document.getElementById('edit_exp_date').value = date;
+    document.getElementById('edit_exp_desc').value = description;
+    openModal('editExpenseModal');
+}
+</script>
+{% endblock %}

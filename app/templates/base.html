@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Personal Finance Advisor Bot{% endblock %}</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="theme-light">
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="app-sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">FinanceBot</span>
+                    <span class="brand-subtitle">AI Wealth & Budget</span>
+                </div>
+                <button class="mobile-sidebar-close" id="sidebarCloseBtn" aria-label="Close sidebar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-user-pill">
+                <div class="user-avatar">
+                    <i class="fa-solid fa-user-check"></i>
+                </div>
+                <div class="user-info">
+                    <span class="user-name">Personal Workspace</span>
+                    <span class="user-tag">INR (₹) Standard</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <span class="nav-section-label">CORE MENU</span>
+                <a href="{{ url_for('main.dashboard') }}" class="nav-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('main.income_view') }}" class="nav-item {% if request.endpoint == 'main.income_view' %}active{% endif %}">
+                    <i class="fa-solid fa-money-bill-trend-up"></i>
+                    <span>Income</span>
+                </a>
+                <a href="{{ url_for('main.expenses_view') }}" class="nav-item {% if request.endpoint == 'main.expenses_view' %}active{% endif %}">
+                    <i class="fa-solid fa-receipt"></i>
+                    <span>Expenses</span>
+                </a>
+                <a href="{{ url_for('main.budgets_view') }}" class="nav-item {% if request.endpoint == 'main.budgets_view' %}active{% endif %}">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                    <span>Budgets</span>
+                </a>
+                <a href="{{ url_for('main.savings_view') }}" class="nav-item {% if request.endpoint == 'main.savings_view' %}active{% endif %}">
+                    <i class="fa-solid fa-piggy-bank"></i>
+                    <span>Savings Goals</span>
+                </a>
+
+                <span class="nav-section-label">INTELLIGENCE & REPORTS</span>
+                <a href="{{ url_for('main.advisor_view') }}" class="nav-item nav-ai {% if request.endpoint == 'main.advisor_view' %}active{% endif %}">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>AI Advisor</span>
+                    <span class="badge-sparkle">Gemini</span>
+                </a>
+                <a href="{{ url_for('main.reports_view') }}" class="nav-item {% if request.endpoint == 'main.reports_view' %}active{% endif %}">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                    <span>Monthly Reports</span>
+                </a>
+                <a href="{{ url_for('main.transactions_view') }}" class="nav-item {% if request.endpoint == 'main.transactions_view' %}active{% endif %}">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>Transactions</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="ai-status-card">
+                    <div class="ai-status-header">
+                        <span class="status-indicator {% if has_gemini_key %}online{% else %}heuristic{% endif %}"></span>
+                        <span class="ai-status-text">
+                            {% if has_gemini_key %}Gemini AI Live{% else %}Heuristic Engine{% endif %}
+                        </span>
+                    </div>
+                    <p class="ai-status-desc">
+                        {% if has_gemini_key %}
+                            Google Gemini API active
+                        {% else %}
+                            Running built-in intelligence
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="app-main">
+            <!-- Top Navigation Header -->
+            <header class="app-header">
+                <div class="header-left">
+                    <button class="mobile-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle navigation">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="page-header-title">
+                        <h1>{% block page_title %}Overview{% endblock %}</h1>
+                        <span class="page-subtitle">{% block page_subtitle %}Personal Finance Management & AI Advisory{% endblock %}</span>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <!-- Quick Action Buttons -->
+                    <div class="quick-actions">
+                        <button class="btn btn-outline-success btn-sm" onclick="openModal('quickIncomeModal')">
+                            <i class="fa-solid fa-plus"></i> <span>Income</span>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="openModal('quickExpenseModal')">
+                            <i class="fa-solid fa-minus"></i> <span>Expense</span>
+                        </button>
+                    </div>
+
+                    <!-- Demo Data Dropdown -->
+                    <div class="dropdown demo-dropdown">
+                        <button class="btn btn-ghost btn-sm dropdown-trigger" id="demoMenuBtn">
+                            <i class="fa-solid fa-database"></i> <span>Demo Data</span> <i class="fa-solid fa-chevron-down fa-xs"></i>
+                        </button>
+                        <div class="dropdown-menu" id="demoMenu">
+                            <a href="{{ url_for('main.load_demo') }}" class="dropdown-item">
+                                <i class="fa-solid fa-wand-magic"></i> Load Realistic Sample Data (₹35k)
+                            </a>
+                            <a href="{{ url_for('main.clear_demo') }}" class="dropdown-item">
+                                <i class="fa-solid fa-eraser"></i> Clear Demo Data Only
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="{{ url_for('main.reset_all') }}" class="dropdown-item text-danger" onclick="return confirm('Are you sure you want to clear ALL transactions, budgets, and goals?');">
+                                <i class="fa-solid fa-trash-can"></i> Reset Entire Database
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Notification Messages -->
+            <div class="notifications-container">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+                                <div class="alert-content">
+                                    {% if category == 'success' %}
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    {% elif category == 'danger' %}
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                    {% elif category == 'warning' %}
+                                        <i class="fa-solid fa-bell"></i>
+                                    {% else %}
+                                        <i class="fa-solid fa-circle-info"></i>
+                                    {% endif %}
+                                    <span>{{ message }}</span>
+                                </div>
+                                <button type="button" class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+
+            <!-- Page Body Content -->
+            <main class="page-content">
+                {% block content %}{% endblock %}
+            </main>
+
+            <!-- App Footer -->
+            <footer class="app-footer">
+                <div class="footer-left">
+                    <span>Personal Finance Advisor Bot &copy; 2026</span>
+                    <span class="sep">&bull;</span>
+                    <span>College Capstone Project & Mentor Evaluation</span>
+                </div>
+                <div class="footer-right">
+                    <span class="currency-tag"><i class="fa-solid fa-indian-rupee-sign"></i> INR Built-in</span>
+                    <span class="sep">&bull;</span>
+                    <a href="{{ url_for('main.advisor_view') }}" class="footer-link">AI Compliance & Educational Disclaimer</a>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Quick Add Income Modal -->
+    <div class="modal" id="quickIncomeModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-money-bill-wave text-success"></i> Add Income</h3>
+                    <button class="modal-close" onclick="closeModal('quickIncomeModal')">&times;</button>
+                </div>
+                <form action="{{ url_for('main.income_view') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label" for="q_inc_source">Income Source *</label>
+                            <select name="source" id="q_inc_source" class="form-control" required>
+                                {% for src in default_income_sources %}
+                                    <option value="{{ src }}">{{ src }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="q_inc_amount">Amount (₹) *</label>
+                            <input type="number" step="0.01" min="1" name="amount" id="q_inc_amount" class="form-control" placeholder="e.g. 35000" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="q_inc_date">Date *</label>
+                            <input type="date" name="date" id="q_inc_date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="q_inc_notes">Notes (Optional)</label>
+                            <input type="text" name="notes" id="q_inc_notes" class="form-control" placeholder="e.g. Monthly salary payout">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('quickIncomeModal')">Cancel</button>
+                        <button type="submit" class="btn btn-success"><i class="fa-solid fa-check"></i> Save Income</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Expense Modal -->
+    <div class="modal" id="quickExpenseModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-receipt text-danger"></i> Add Expense</h3>
+                    <button class="modal-close" onclick="closeModal('quickExpenseModal')">&times;</button>
+                </div>
+                <form action="{{ url_for('main.expenses_view') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label" for="q_exp_category">Category *</label>
+                            <select name="category" id="q_exp_category" class="form-control" required>
+                                {% for cat in default_categories %}
+                                    <option value="{{ cat }}">{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="q_exp_amount">Amount (₹) *</label>
+                            <input type="number" step="0.01" min="1" name="amount" id="q_exp_amount" class="form-control" placeholder="e.g. 1500" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="q_exp_date">Date *</label>
+                            <input type="date" name="date" id="q_exp_date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="q_exp_desc">Description / Notes</label>
+                            <input type="text" name="description" id="q_exp_desc" class="form-control" placeholder="e.g. Groceries at Supermarket">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('quickExpenseModal')">Cancel</button>
+                        <button type="submit" class="btn btn-danger"><i class="fa-solid fa-check"></i> Save Expense</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

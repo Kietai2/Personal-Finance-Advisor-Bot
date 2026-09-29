@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Transaction Ledger & History | Personal Finance Advisor Bot{% endblock %}
+{% block page_title %}Transaction Ledger{% endblock %}
+{% block page_subtitle %}Comprehensive historical ledger of all incoming credits and outgoing debits{% endblock %}
+
+{% block content %}
+<!-- Filtering & Search Toolbar -->
+<div class="page-toolbar">
+    <form method="GET" action="{{ url_for('main.transactions_view') }}" class="toolbar-filters">
+        <input type="text" name="search" value="{{ search }}" class="form-control" placeholder="Search keywords..." style="width: 170px;">
+
+        <select name="type" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Types (Income & Expenses)</option>
+            <option value="income" {% if trans_type == 'income' %}selected{% endif %}>Income (+)</option>
+            <option value="expense" {% if trans_type == 'expense' %}selected{% endif %}>Expense (-)</option>
+        </select>
+
+        <input type="date" name="start_date" value="{{ start_date }}" class="form-control" title="Start Date" style="width: auto;">
+        <input type="date" name="end_date" value="{{ end_date }}" class="form-control" title="End Date" style="width: auto;">
+
+        <select name="sort" class="form-control" style="width: auto;" onchange="this.form.submit()">
+            <option value="date_desc" {% if sort == 'date_desc' %}selected{% endif %}>Date: Newest First</option>
+            <option value="date_asc" {% if sort == 'date_asc' %}selected{% endif %}>Date: Oldest First</option>
+            <option value="amount_desc" {% if sort == 'amount_desc' %}selected{% endif %}>Amount: Highest First</option>
+            <option value="amount_asc" {% if sort == 'amount_asc' %}selected{% endif %}>Amount: Lowest First</option>
+        </select>
+
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="fa-solid fa-filter"></i> Apply</button>
+
+        {% if search or trans_type or start_date or end_date or sort != 'date_desc' %}
+            <a href="{{ url_for('main.transactions_view') }}" class="btn btn-ghost btn-sm">Clear</a>
+        {% endif %}
+    </form>
+
+    <div class="toolbar-actions">
+        <a href="{{ url_for('main.export_transactions', type=trans_type, category=category, search=search, start_date=start_date, end_date=end_date) }}" class="btn btn-secondary btn-sm">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+        </a>
+    </div>
+</div>
+
+<!-- Ledger Net Totals Banner -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total Credits (Income)</span>
+        <div style="font-size: 1.35rem; font-weight: 700; color: var(--success);">
+            +{{ total_income | currency }}
+        </div>
+    </div>
+    <div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total Debits (Expenses)</span>
+        <div style="font-size: 1.35rem; font-weight: 700; color: var(--danger);">
+            -{{ total_expense | currency }}
+        </div>
+    </div>
+    <div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Net Cash Balance</span>
+        <div style="font-size: 1.35rem; font-weight: 700; color: {% if net_difference >= 0 %}var(--primary){% else %}var(--danger){% endif %};">
+            {{ net_difference | currency }}
+        </div>
+    </div>
+</div>
+
+<!-- Ledger Transactions Table -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fa-solid fa-book-open text-primary"></i>
+            Transactions Ledger (Showing {{ transactions|length }} of {{ total_tx }})
+        </div>
+    </div>
+    <div class="card-body p-0">
+        {% if transactions %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Category / Source</th>
+                            <th>Amount (INR)</th>
+                            <th>Description / Memo</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in transactions %}
+                            <tr>
+                                <td style="font-weight: 500;">
+                                    {{ tx.date.strftime('%b %d, %Y') }}
+                                </td>
+                                <td>
+                                    <span class="badge {% if tx.type == 'income' %}badge-success{% else %}badge-danger{% endif %}">
+                                        {{ tx.type | upper }}
+                                    </span>
+                                    {% if tx.is_demo %}
+                                        <span class="badge badge-demo">Sample</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-weight: 600;">
+                                    {{ tx.category_or_source }}
+                                </td>
+                                <td style="font-weight: 700;" class="{% if tx.type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                                    {% if tx.type == 'income' %}+{% else %}-{% endif %}{{ tx.amount | currency }}
+                                </td>
+                                <td style="color: var(--text-secondary); max-width: 280px;">
+                                    {{ tx.description or '—' }}
+                                </td>
+                                <td style="text-align: right;">
+                                    {% if tx.type == 'income' %}
+                                        <form action="{{ url_for('main.delete_income', income_id=tx.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Delete this income transaction?');">
+                                            <button type="submit" class="btn btn-ghost btn-sm text-danger" title="Delete">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <form action="{{ url_for('main.delete_expense', expense_id=tx.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Delete this expense transaction?');">
+                                            <button type="submit" class="btn btn-ghost btn-sm text-danger" title="Delete">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+                <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">
+                        Page {{ page }} of {{ total_pages }}
+                    </span>
+                    <div style="display: flex; gap: 0.5rem;">
+                        {% if page > 1 %}
+                            <a href="{{ url_for('main.transactions_view', page=page-1, type=trans_type, category=category, search=search, start_date=start_date, end_date=end_date, sort=sort) }}" class="btn btn-secondary btn-sm">
+                                &laquo; Previous
+                            </a>
+                        {% endif %}
+                        {% if page < total_pages %}
+                            <a href="{{ url_for('main.transactions_view', page=page+1, type=trans_type, category=category, search=search, start_date=start_date, end_date=end_date, sort=sort) }}" class="btn btn-secondary btn-sm">
+                                Next &raquo;
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fa-solid fa-receipt"></i></div>
+                <div class="empty-state-title">No Transactions Found</div>
+                <p class="empty-state-desc">Try clearing your filters or load realistic sample demo data to see the ledger in action.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
