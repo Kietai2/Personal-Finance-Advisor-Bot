@@ -7,7 +7,7 @@
 ### **Project Links**
 
 * **Live Demo:** [ADD DEPLOYED DEMO URL]
-* **GitHub Repository:** [ADD GITHUB REPOSITORY URL]
+* **GitHub Repository:** [https://github.com/Kietai2/Personal-Finance-Advisor-Bot](https://github.com/Kietai2/Personal-Finance-Advisor-Bot)
 
 *(If deploying to Render, Railway, or Heroku, insert your deployed web app URL above. Insert your GitHub repository remote link after pushing.)*
 
@@ -225,7 +225,7 @@ Follow these 8 steps to run the application on your local machine:
 
 ### 1. Clone the repository
 ```bash
-git clone [ADD GITHUB REPOSITORY URL]
+git clone https://github.com/Kietai2/Personal-Finance-Advisor-Bot.git
 cd personal-finance-advisor
 ```
 
