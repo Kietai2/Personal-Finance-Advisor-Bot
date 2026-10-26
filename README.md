@@ -6,10 +6,10 @@
 
 ### **Project Links**
 
-* **Live Demo:** [ADD DEPLOYED DEMO URL]
+* **Comprehensive Technical Documentation:** [DOCUMENTATION.md](DOCUMENTATION.md)
 * **GitHub Repository:** [https://github.com/Kietai2/Personal-Finance-Advisor-Bot](https://github.com/Kietai2/Personal-Finance-Advisor-Bot)
+* **Live Demo:** [Deploy on Render](https://render.com)
 
-*(If deploying to Render, Railway, or Heroku, insert your deployed web app URL above. Insert your GitHub repository remote link after pushing.)*
 
 ---
 
